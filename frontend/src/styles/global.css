@@ -1,0 +1,207 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.page-container {
+  padding: 20px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.filter-bar {
+  background: #fff;
+  padding: 16px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+.table-wrapper {
+  background: #fff;
+  padding: 16px;
+  border-radius: 4px;
+}
+
+.status-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.status-success {
+  background: #f0f9eb;
+  color: #67c23a;
+}
+
+.status-warning {
+  background: #fdf6ec;
+  color: #e6a23c;
+}
+
+.status-danger {
+  background: #fef0f0;
+  color: #f56c6c;
+}
+
+.status-info {
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.status-primary {
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.mb-16 {
+  margin-bottom: 16px;
+}
+
+.mt-16 {
+  margin-top: 16px;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-muted {
+  color: #909399;
+  font-size: 12px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 4px;
+  padding: 16px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #303133;
+}
+
+.mobile-page {
+  min-height: 100vh;
+  background: #f5f7fa;
+  padding-bottom: 60px;
+}
+
+.mobile-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #409eff;
+  color: #fff;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+}
+
+.mobile-header-title {
+  flex: 1;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.mobile-card {
+  background: #fff;
+  margin: 12px;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.mobile-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.mobile-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.mobile-list-item {
+  padding: 12px 0;
+  border-bottom: 1px solid #f2f6fc;
+}
+
+.mobile-list-item:last-child {
+  border-bottom: none;
+}
+
+.mobile-bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border-top: 1px solid #ebeef5;
+  padding: 10px 16px;
+  display: flex;
+  gap: 12px;
+  z-index: 100;
+}
+
+.mobile-bottom-bar .el-button {
+  flex: 1;
+}
+
+.form-label {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 6px;
+}
+
+.form-value {
+  font-size: 14px;
+  color: #303133;
+}

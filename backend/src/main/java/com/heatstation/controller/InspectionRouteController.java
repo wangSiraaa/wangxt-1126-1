@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -118,8 +119,7 @@ public class InspectionRouteController {
             route.setPlanDate(java.sql.Date.valueOf((String) params.get("planDate")));
         }
 
-        @SuppressWarnings("unchecked")
-        List<Long> stationIds = (List<Long>) params.get("stationIds");
+        List<Long> stationIds = convertToLongList(params.get("stationIds"));
 
         InspectionRoute result = routeService.createRoute(route, stationIds);
         return Result.success(result);
@@ -161,5 +161,36 @@ public class InspectionRouteController {
                 .orderByDesc(InspectionRoute::getCreateTime)
                 .list();
         return Result.success(routes);
+    }
+
+    private List<Long> convertToLongList(Object obj) {
+        List<Long> result = new ArrayList<>();
+        if (obj == null) {
+            return result;
+        }
+        if (!(obj instanceof List)) {
+            return result;
+        }
+        List<?> list = (List<?>) obj;
+        for (Object item : list) {
+            if (item == null) {
+                continue;
+            }
+            if (item instanceof Number) {
+                result.add(((Number) item).longValue());
+            } else if (item instanceof String) {
+                String str = (String) item;
+                if (!str.trim().isEmpty()) {
+                    try {
+                        result.add(Long.parseLong(str.trim()));
+                    } catch (NumberFormatException e) {
+                        throw new RuntimeException("站点ID格式无效：" + str);
+                    }
+                }
+            } else {
+                throw new RuntimeException("站点ID类型不支持：" + item.getClass().getName());
+            }
+        }
+        return result;
     }
 }

@@ -6,8 +6,10 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.heatstation.common.PageResult;
 import com.heatstation.entity.ColdComplaint;
 import com.heatstation.entity.RepairOrder;
+import com.heatstation.event.RepairOrderStatusChangedEvent;
 import com.heatstation.mapper.ColdComplaintMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -216,6 +218,32 @@ public class ColdComplaintService extends ServiceImpl<ColdComplaintMapper, ColdC
                 closerId, closerName, closeRemark);
 
         return result;
+    }
+
+    @EventListener
+    @Transactional(rollbackFor = Exception.class)
+    public void onRepairOrderStatusChanged(RepairOrderStatusChangedEvent event) {
+        if (!"COMPLAINT".equals(event.getSourceType()) || event.getSourceId() == null) {
+            return;
+        }
+        String newStatus = event.getNewStatus();
+        if (!"FINISHED".equals(newStatus) && !"CONFIRMED".equals(newStatus)) {
+            return;
+        }
+        ColdComplaint complaint = this.getById(event.getSourceId());
+        if (complaint == null) {
+            return;
+        }
+        if (!"REPAIRING".equals(complaint.getStatus())) {
+            return;
+        }
+        complaint.setStatus("REPAIRED");
+        complaint.setFinishTime(new Date());
+        this.updateById(complaint);
+
+        flowLogService.addLog("COMPLAINT", complaint.getId(), complaint.getComplaintNo(),
+                "FINISH", "关联抢修工单已完成，自动标记修复完成",
+                null, "系统自动", "抢修工单ID：" + event.getRepairOrderId());
     }
 
     private String getStatusDesc(String status) {

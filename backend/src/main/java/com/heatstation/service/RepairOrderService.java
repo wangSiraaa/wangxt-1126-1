@@ -4,17 +4,19 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.heatstation.common.PageResult;
-import com.heatstation.entity.ColdComplaint;
+import com.heatstation.entity.InspectionException;
 import com.heatstation.entity.RepairOrder;
 import com.heatstation.entity.StationMetricHistory;
+import com.heatstation.event.RepairOrderStatusChangedEvent;
+import com.heatstation.mapper.InspectionExceptionMapper;
 import com.heatstation.mapper.RepairOrderMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -31,7 +33,10 @@ public class RepairOrderService extends ServiceImpl<RepairOrderMapper, RepairOrd
     private StationMetricHistoryService metricHistoryService;
 
     @Autowired
-    private ColdComplaintService coldComplaintService;
+    private InspectionExceptionMapper inspectionExceptionMapper;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
 
     public PageResult<RepairOrder> queryPage(Long pageNum, Long pageSize, String status,
                                               String faultLevel, Long stationId,
@@ -88,6 +93,7 @@ public class RepairOrderService extends ServiceImpl<RepairOrderMapper, RepairOrd
                 "ACCEPT", "接单",
                 repairTeamId, repairTeamName, null);
 
+        publishStatusEvent(order, "ACCEPTED");
         return result;
     }
 
@@ -110,6 +116,7 @@ public class RepairOrderService extends ServiceImpl<RepairOrderMapper, RepairOrd
                 "START", "到达现场，开始抢修",
                 order.getRepairTeamId(), order.getRepairTeamName(), null);
 
+        publishStatusEvent(order, "IN_PROGRESS");
         return result;
     }
 
@@ -152,6 +159,7 @@ public class RepairOrderService extends ServiceImpl<RepairOrderMapper, RepairOrd
 
         updateLinkedExceptions(orderId, "REPAIRED");
 
+        publishStatusEvent(order, "FINISHED");
         return result;
     }
 
@@ -170,15 +178,13 @@ public class RepairOrderService extends ServiceImpl<RepairOrderMapper, RepairOrd
     }
 
     private void updateLinkedExceptions(Long repairOrderId, String status) {
-        List<com.heatstation.entity.InspectionException> exceptions =
-                listExceptionsByRepairOrderId(repairOrderId);
-        for (com.heatstation.entity.InspectionException ex : exceptions) {
+        LambdaQueryWrapper<InspectionException> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(InspectionException::getRepairOrderId, repairOrderId);
+        List<InspectionException> exceptions = inspectionExceptionMapper.selectList(wrapper);
+        for (InspectionException ex : exceptions) {
             ex.setStatus(status);
+            inspectionExceptionMapper.updateById(ex);
         }
-    }
-
-    private List<com.heatstation.entity.InspectionException> listExceptionsByRepairOrderId(Long repairOrderId) {
-        return new ArrayList<>();
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -198,6 +204,7 @@ public class RepairOrderService extends ServiceImpl<RepairOrderMapper, RepairOrd
                 "CONFIRM", "确认抢修完成",
                 confirmerId, confirmerName, null);
 
+        publishStatusEvent(order, "CONFIRMED");
         return result;
     }
 
@@ -221,6 +228,7 @@ public class RepairOrderService extends ServiceImpl<RepairOrderMapper, RepairOrd
                 "CLOSE", "关闭工单",
                 closerId, closerName, closeRemark);
 
+        publishStatusEvent(order, "CLOSED");
         return result;
     }
 
@@ -232,5 +240,11 @@ public class RepairOrderService extends ServiceImpl<RepairOrderMapper, RepairOrd
         }
         wrapper.orderByDesc(RepairOrder::getCreateTime);
         return this.list(wrapper);
+    }
+
+    private void publishStatusEvent(RepairOrder order, String newStatus) {
+        eventPublisher.publishEvent(new RepairOrderStatusChangedEvent(
+                this, order.getId(), order.getSourceType(),
+                order.getSourceId(), newStatus));
     }
 }

@@ -82,17 +82,43 @@
     </div>
 
     <el-dialog v-model="finishDialogVisible" title="完成抢修" width="90%">
-      <el-form :model="finishForm" label-width="80px">
-        <el-form-item label="抢修结果">
+      <el-form :model="finishForm" label-width="100px">
+        <el-form-item label="抢修结果" required>
           <el-input
-            v-model="finishForm.repairResult"
+            v-model="finishForm.repairContent"
             type="textarea"
             :rows="4"
             placeholder="请输入抢修结果描述"
           />
         </el-form-item>
-        <el-form-item label="故障原因">
-          <el-input v-model="finishForm.faultCause" placeholder="请输入故障原因（可选）" />
+        <el-form-item label="阀门操作" required>
+          <el-input
+            v-model="finishForm.valveOperation"
+            type="textarea"
+            :rows="3"
+            placeholder="请记录操作的阀门编号、开关状态、操作时间等"
+          />
+        </el-form-item>
+        <el-form-item label="临时供热方案">
+          <el-input
+            v-model="finishForm.tempHeatPlan"
+            type="textarea"
+            :rows="3"
+            placeholder="请描述临时/应急供热措施（如有）"
+          />
+        </el-form-item>
+        <el-form-item label="预计恢复时间">
+          <el-date-picker
+            v-model="finishForm.estRestoreTime"
+            type="datetime"
+            placeholder="选择预计恢复正常时间"
+            format="YYYY-MM-DD HH:mm:ss"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="使用材料">
+          <el-input v-model="finishForm.repairMaterial" placeholder="请输入使用材料（可选）" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -121,8 +147,11 @@ const finishLoading = ref(false)
 const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
 
 const finishForm = reactive({
-  repairResult: '',
-  faultCause: ''
+  repairContent: '',
+  valveOperation: '',
+  tempHeatPlan: '',
+  estRestoreTime: '',
+  repairMaterial: ''
 })
 
 const showActions = computed(() => {
@@ -260,14 +289,21 @@ const handleArrive = () => {
 }
 
 const handleFinish = () => {
-  finishForm.repairResult = ''
-  finishForm.faultCause = ''
+  finishForm.repairContent = ''
+  finishForm.valveOperation = ''
+  finishForm.tempHeatPlan = ''
+  finishForm.estRestoreTime = ''
+  finishForm.repairMaterial = ''
   finishDialogVisible.value = true
 }
 
 const confirmFinish = async () => {
-  if (!finishForm.repairResult.trim()) {
+  if (!finishForm.repairContent.trim()) {
     ElMessage.warning('请输入抢修结果描述')
+    return
+  }
+  if (!finishForm.valveOperation.trim()) {
+    ElMessage.warning('请记录阀门操作信息')
     return
   }
   finishLoading.value = true
@@ -275,8 +311,11 @@ const confirmFinish = async () => {
     await finishRepair(route.params.id, {
       repairTeamId: userInfo.userId,
       repairTeamName: userInfo.userName,
-      repairResult: finishForm.repairResult,
-      faultCause: finishForm.faultCause
+      repairContent: finishForm.repairContent,
+      valveOperation: finishForm.valveOperation,
+      tempHeatPlan: finishForm.tempHeatPlan,
+      estRestoreTime: finishForm.estRestoreTime,
+      repairMaterial: finishForm.repairMaterial
     })
     ElMessage.success('抢修完成')
     finishDialogVisible.value = false

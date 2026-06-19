@@ -54,6 +54,8 @@ public class InspectionException extends BaseEntity {
 
     private String upgradeReason;
 
+    private String closeRestriction;
+
     private Long repairOrderId;
 
     private Long handlerId;

@@ -60,6 +60,19 @@
             </span>
           </template>
         </el-table-column>
+        <el-table-column prop="priority" label="优先级" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="getPriorityTagType(row.priority)" size="small">
+              {{ getPriorityText(row.priority) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="metricStable" label="指标" width="70" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.metricStable === 1" type="success" size="small">稳</el-tag>
+            <el-tag v-else type="danger" size="small">异</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="handleDetail(row)">详情</el-button>
@@ -260,6 +273,16 @@ const getStatusClass = (status) => {
     CLOSED: 'status-info'
   }
   return map[status] || 'status-info'
+}
+
+const getPriorityText = (priority) => {
+  const map = { 0: '普通', 1: '较高', 2: '紧急', 3: '最高紧急' }
+  return map[priority] || '普通'
+}
+
+const getPriorityTagType = (priority) => {
+  const map = { 0: 'info', 1: '', 2: 'warning', 3: 'danger' }
+  return map[priority] || 'info'
 }
 
 const loadStations = async () => {

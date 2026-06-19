@@ -123,7 +123,8 @@ public class RepairOrderService extends ServiceImpl<RepairOrderMapper, RepairOrd
     @Transactional(rollbackFor = Exception.class)
     public boolean finishRepair(Long orderId, BigDecimal pressureAfter,
                                  BigDecimal supplyTempAfter, BigDecimal returnTempAfter,
-                                 String repairContent, String repairMaterial, BigDecimal workHours) {
+                                 String repairContent, String repairMaterial, BigDecimal workHours,
+                                 String valveOperation, String tempHeatPlan, Date estRestoreTime) {
         RepairOrder order = this.getById(orderId);
         if (order == null) {
             throw new RuntimeException("抢修工单不存在");
@@ -140,6 +141,9 @@ public class RepairOrderService extends ServiceImpl<RepairOrderMapper, RepairOrd
         order.setRepairContent(repairContent);
         order.setRepairMaterial(repairMaterial);
         order.setWorkHours(workHours);
+        order.setValveOperation(valveOperation);
+        order.setTempHeatPlan(tempHeatPlan);
+        order.setEstRestoreTime(estRestoreTime);
         boolean result = this.updateById(order);
 
         if (pressureAfter != null) {

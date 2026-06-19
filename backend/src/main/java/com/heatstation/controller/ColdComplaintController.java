@@ -98,4 +98,14 @@ public class ColdComplaintController {
         complaintService.closeComplaint(complaintId, closerId, closerName, closeRemark);
         return Result.success("关闭成功");
     }
+
+    @PostMapping("/confirmMetricStable")
+    public Result<?> confirmMetricStable(@RequestBody Map<String, Object> params) {
+        Long complaintId = Long.valueOf(params.get("complaintId").toString());
+        Long operatorId = params.get("operatorId") != null ? Long.valueOf(params.get("operatorId").toString()) : null;
+        String operatorName = (String) params.get("operatorName");
+
+        complaintService.confirmMetricStable(complaintId, operatorId, operatorName);
+        return Result.success("站点指标已确认回稳");
+    }
 }

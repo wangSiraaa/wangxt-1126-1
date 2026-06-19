@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.heatstation.common.PageResult;
 import com.heatstation.entity.ColdComplaint;
 import com.heatstation.entity.RepairOrder;
+import com.heatstation.entity.Station;
+import com.heatstation.entity.StationMetricHistory;
 import com.heatstation.event.RepairOrderStatusChangedEvent;
 import com.heatstation.mapper.ColdComplaintMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +23,12 @@ public class ColdComplaintService extends ServiceImpl<ColdComplaintMapper, ColdC
 
     @Autowired
     private RepairOrderService repairOrderService;
+
+    @Autowired
+    private StationService stationService;
+
+    @Autowired
+    private StationMetricHistoryService metricHistoryService;
 
     @Autowired
     private OrderFlowLogService flowLogService;
@@ -206,6 +214,19 @@ public class ColdComplaintService extends ServiceImpl<ColdComplaintMapper, ColdC
             throw new RuntimeException("当前状态不能关闭事件");
         }
 
+        if (complaint.getStationId() != null && (complaint.getMetricStable() == null || complaint.getMetricStable() != 1)) {
+            boolean stable = checkStationMetricStable(complaint.getStationId());
+            if (!stable) {
+                throw new RuntimeException("对应站点指标尚未回稳，不能关闭报冷事件。请等待站点压力和温度恢复正常范围");
+            }
+            complaint.setMetricStable(1);
+            complaint.setMetricStableTime(new Date());
+        }
+
+        if (!"VISITED".equals(complaint.getStatus()) && complaint.getRepairOrderId() != null) {
+            throw new RuntimeException("居民事件关闭前必须完成回访。请先进行居民回访确认");
+        }
+
         complaint.setStatus("CLOSED");
         complaint.setCloseTime(new Date());
         complaint.setCloserId(closerId);
@@ -218,6 +239,56 @@ public class ColdComplaintService extends ServiceImpl<ColdComplaintMapper, ColdC
                 closerId, closerName, closeRemark);
 
         return result;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public boolean confirmMetricStable(Long complaintId, Long operatorId, String operatorName) {
+        ColdComplaint complaint = this.getById(complaintId);
+        if (complaint == null) {
+            throw new RuntimeException("报冷事件不存在");
+        }
+
+        if (complaint.getStationId() == null) {
+            throw new RuntimeException("事件未关联站点");
+        }
+
+        boolean stable = checkStationMetricStable(complaint.getStationId());
+        if (!stable) {
+            throw new RuntimeException("站点指标尚未回稳，无法确认。当前站点压力或温度仍在异常范围");
+        }
+
+        complaint.setMetricStable(1);
+        complaint.setMetricStableTime(new Date());
+        boolean result = this.updateById(complaint);
+
+        flowLogService.addLog("COMPLAINT", complaintId, complaint.getComplaintNo(),
+                "CONFIRM_STABLE", "确认站点指标回稳",
+                operatorId, operatorName, null);
+
+        return result;
+    }
+
+    private boolean checkStationMetricStable(Long stationId) {
+        Station station = stationService.getById(stationId);
+        if (station == null) {
+            return false;
+        }
+
+        Date oneHourAgo = new Date(System.currentTimeMillis() - 60 * 60 * 1000);
+        java.util.List<StationMetricHistory> recentMetrics = metricHistoryService.queryByStationAndType(
+                stationId, null, oneHourAgo, new Date());
+
+        if (recentMetrics.isEmpty()) {
+            return false;
+        }
+
+        for (StationMetricHistory metric : recentMetrics) {
+            if (!"NORMAL".equals(metric.getMetricStatus())) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     @EventListener

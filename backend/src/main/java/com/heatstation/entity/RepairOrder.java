@@ -70,6 +70,13 @@ public class RepairOrder extends BaseEntity {
 
     private String repairMaterial;
 
+    private String valveOperation;
+
+    private String tempHeatPlan;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    private Date estRestoreTime;
+
     private BigDecimal workHours;
 
     private String remark;

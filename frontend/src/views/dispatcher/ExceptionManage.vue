@@ -62,17 +62,24 @@
             </span>
           </template>
         </el-table-column>
+        <el-table-column prop="closeRestriction" label="限制" width="110">
+          <template #default="{ row }">
+            <el-tag v-if="row.closeRestriction === 'PRIMARY_OVERLIMIT'" type="danger" size="small">一次网越限</el-tag>
+            <span v-else style="color: #c0c4cc">-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="repairOrderNo" label="关联工单" width="130">
           <template #default="{ row }">
             <span v-if="row.repairOrderNo">{{ row.repairOrderNo }}</span>
             <span v-else style="color: #c0c4cc">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="handleConfirm(row)" v-if="row.status === 'REPORTED'">确认</el-button>
             <el-button type="warning" link size="small" @click="handleDispatch(row)" v-if="row.status === 'CONFIRMED'">派单</el-button>
-            <el-button type="success" link size="small" @click="handleClose(row)" v-if="row.status === 'REPAIRED'">关闭</el-button>
+            <el-button type="success" link size="small" @click="handleClose(row)" v-if="row.status === 'REPAIRED' && row.closeRestriction !== 'PRIMARY_OVERLIMIT'">关闭</el-button>
+            <el-button type="danger" link size="small" @click="handleRecheck(row)" v-if="row.closeRestriction === 'PRIMARY_OVERLIMIT'">转复测</el-button>
             <el-button type="primary" link size="small" @click="handleDetail(row)">详情</el-button>
           </template>
         </el-table-column>
@@ -109,6 +116,21 @@
         <el-button type="primary" @click="confirmDispatch" :loading="dispatchLoading">确定</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="recheckDialogVisible" title="一次网越限异常转复测" width="500px">
+      <el-alert type="warning" :closable="false" style="margin-bottom: 16px">
+        一次网越限异常禁止直接关闭，需转为复测任务重新检测站点指标。
+      </el-alert>
+      <el-form :model="recheckForm" label-width="100px">
+        <el-form-item label="转复测原因" required>
+          <el-input v-model="recheckForm.recheckReason" type="textarea" :rows="3" placeholder="请说明转复测原因" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="recheckDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmRecheck" :loading="recheckLoading">确定转复测</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -120,13 +142,16 @@ import {
   getExceptionPage,
   confirmException,
   dispatchException,
-  closeException
+  closeException,
+  convertToRecheck
 } from '@/api/exception'
 import { getUserListByRole } from '@/api/user'
 
 const loading = ref(false)
 const dispatchLoading = ref(false)
+const recheckLoading = ref(false)
 const dispatchDialogVisible = ref(false)
+const recheckDialogVisible = ref(false)
 const currentException = ref(null)
 const tableData = ref([])
 const total = ref(0)
@@ -144,6 +169,10 @@ const queryForm = reactive({
 const dispatchForm = reactive({
   repairTeamId: null,
   remark: ''
+})
+
+const recheckForm = reactive({
+  recheckReason: ''
 })
 
 const getTypeText = (type) => {
@@ -283,6 +312,32 @@ const handleClose = (row) => {
     ElMessage.success('关闭成功')
     loadData()
   }).catch(() => {})
+}
+
+const handleRecheck = (row) => {
+  currentException.value = row
+  recheckForm.recheckReason = ''
+  recheckDialogVisible.value = true
+}
+
+const confirmRecheck = async () => {
+  if (!recheckForm.recheckReason.trim()) {
+    ElMessage.warning('请输入转复测原因')
+    return
+  }
+  recheckLoading.value = true
+  try {
+    await convertToRecheck(currentException.value.id, {
+      operatorId: userInfo.userId,
+      operatorName: userInfo.userName,
+      recheckReason: recheckForm.recheckReason
+    })
+    ElMessage.success('转复测成功')
+    recheckDialogVisible.value = false
+    loadData()
+  } finally {
+    recheckLoading.value = false
+  }
 }
 
 const handleDetail = (row) => {

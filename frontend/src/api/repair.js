@@ -133,7 +133,10 @@ export function finishRepair(orderId, data = {}) {
       returnTempAfter: data.returnTempAfter,
       repairContent: data.repairContent,
       repairMaterial: data.repairMaterial,
-      workHours: data.workHours
+      workHours: data.workHours,
+      valveOperation: data.valveOperation,
+      tempHeatPlan: data.tempHeatPlan,
+      estRestoreTime: data.estRestoreTime
     }
   })
 }

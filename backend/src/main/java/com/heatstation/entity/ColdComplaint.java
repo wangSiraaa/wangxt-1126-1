@@ -39,6 +39,17 @@ public class ColdComplaint extends BaseEntity {
 
     private BigDecimal indoorTemp;
 
+    private Integer priority;
+
+    private String priorityUpgradeReason;
+
+    private Long linkedExceptionId;
+
+    private Integer metricStable;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    private Date metricStableTime;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date complaintTime;
 

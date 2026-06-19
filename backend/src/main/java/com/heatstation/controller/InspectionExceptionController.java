@@ -97,4 +97,15 @@ public class InspectionExceptionController {
                 .orderByDesc(InspectionException::getReportTime)
                 .list());
     }
+
+    @PostMapping("/convertToRecheck")
+    public Result<?> convertToRecheck(@RequestBody Map<String, Object> params) {
+        Long exceptionId = Long.valueOf(params.get("exceptionId").toString());
+        Long operatorId = params.get("operatorId") != null ? Long.valueOf(params.get("operatorId").toString()) : null;
+        String operatorName = (String) params.get("operatorName");
+        String recheckReason = (String) params.get("recheckReason");
+
+        exceptionService.convertToRecheck(exceptionId, operatorId, operatorName, recheckReason);
+        return Result.success("转复测成功");
+    }
 }

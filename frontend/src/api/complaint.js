@@ -85,6 +85,18 @@ export function closeComplaint(complaintId, data = {}) {
   })
 }
 
+export function confirmMetricStable(complaintId, data = {}) {
+  return request({
+    url: '/cold/complaint/confirmMetricStable',
+    method: 'post',
+    data: {
+      complaintId,
+      operatorId: data.operatorId,
+      operatorName: data.operatorName
+    }
+  })
+}
+
 export function getComplaintDetail(id) {
   return getComplaintById(id)
 }

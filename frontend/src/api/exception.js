@@ -93,3 +93,16 @@ export function getOrderFlowLogs(orderType, orderId) {
     params: { orderType, orderId }
   })
 }
+
+export function convertToRecheck(exceptionId, data = {}) {
+  return request({
+    url: '/inspection/exception/convertToRecheck',
+    method: 'post',
+    data: {
+      exceptionId,
+      operatorId: data.operatorId,
+      operatorName: data.operatorName,
+      recheckReason: data.recheckReason
+    }
+  })
+}

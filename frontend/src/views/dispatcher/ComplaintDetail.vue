@@ -22,12 +22,29 @@
           <span v-if="complaintInfo.indoorTemp">{{ complaintInfo.indoorTemp }}℃</span>
           <span v-else>-</span>
         </el-descriptions-item>
+        <el-descriptions-item label="优先级">
+          <el-tag :type="getPriorityTagType(complaintInfo.priority)" size="small">
+            {{ getPriorityText(complaintInfo.priority) }}
+          </el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="站点指标">
+          <el-tag :type="complaintInfo.metricStable === 1 ? 'success' : 'danger'" size="small">
+            {{ complaintInfo.metricStable === 1 ? '已回稳' : '未回稳' }}
+          </el-tag>
+        </el-descriptions-item>
         <el-descriptions-item label="地址" :span="2">{{ complaintInfo.address }}</el-descriptions-item>
         <el-descriptions-item label="问题描述" :span="2">{{ complaintInfo.description }}</el-descriptions-item>
+        <el-descriptions-item label="优先级升级原因" v-if="complaintInfo.priorityUpgradeReason" :span="2">
+          <span style="color: #e6a23c">{{ complaintInfo.priorityUpgradeReason }}</span>
+        </el-descriptions-item>
         <el-descriptions-item label="处理人" v-if="complaintInfo.handlerName">{{ complaintInfo.handlerName }}</el-descriptions-item>
         <el-descriptions-item label="处理时间" v-if="complaintInfo.handleTime">{{ complaintInfo.handleTime }}</el-descriptions-item>
         <el-descriptions-item label="关联抢修工单" v-if="complaintInfo.repairOrderId" :span="2">
           <el-link type="primary" @click="goToRepair">{{ complaintInfo.repairOrderNo || '查看工单' }}</el-link>
+        </el-descriptions-item>
+        <el-descriptions-item label="回访结果" v-if="complaintInfo.visitResult" :span="2">
+          {{ complaintInfo.visitResult }}
+          <span v-if="complaintInfo.satisfaction" style="margin-left: 8px; color: #e6a23c">满意度：{{ complaintInfo.satisfaction }}分</span>
         </el-descriptions-item>
       </el-descriptions>
     </div>
@@ -55,7 +72,13 @@
     <div class="action-bar">
       <el-button @click="goBack">返回</el-button>
       <el-button type="warning" @click="handleDispatch" v-if="canDispatch">派抢修工单</el-button>
-      <el-button type="success" @click="handleClose" v-if="canClose">关闭事件</el-button>
+      <el-button type="info" @click="handleConfirmMetricStable" v-if="canConfirmStable" :loading="stableLoading">
+        确认指标回稳
+      </el-button>
+      <el-button type="success" @click="handleClose" v-if="canClose" :disabled="!canActuallyClose">关闭事件</el-button>
+      <div class="close-tip" v-if="showCloseTip" style="color: #e6a23c; font-size: 12px; margin-top: 6px">
+        {{ closeTipText }}
+      </div>
     </div>
 
     <el-dialog v-model="dispatchDialogVisible" title="派发抢修工单" width="500px">
@@ -96,7 +119,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getComplaintDetail, dispatchComplaint, closeComplaint } from '@/api/complaint'
+import { getComplaintDetail, dispatchComplaint, closeComplaint, confirmMetricStable } from '@/api/complaint'
 import { getOrderFlowLogs } from '@/api/exception'
 import { getUserListByRole } from '@/api/user'
 
@@ -107,6 +130,7 @@ const flowLogs = ref([])
 const repairTeamList = ref([])
 const dispatchDialogVisible = ref(false)
 const dispatchLoading = ref(false)
+const stableLoading = ref(false)
 const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
 
 const dispatchForm = reactive({
@@ -124,6 +148,44 @@ const canClose = computed(() => {
   const status = complaintInfo.value.status
   return status === 'REPAIRED' || status === 'VISITED'
 })
+
+const canConfirmStable = computed(() => {
+  const c = complaintInfo.value
+  return c.stationId && c.metricStable !== 1 && c.status !== 'CLOSED'
+})
+
+const canActuallyClose = computed(() => {
+  const c = complaintInfo.value
+  const metricOk = !c.stationId || c.metricStable === 1
+  const visitOk = c.status === 'VISITED' || !c.repairOrderId
+  return metricOk && visitOk
+})
+
+const showCloseTip = computed(() => {
+  return canClose.value && !canActuallyClose.value
+})
+
+const closeTipText = computed(() => {
+  const tips = []
+  const c = complaintInfo.value
+  if (c.stationId && c.metricStable !== 1) {
+    tips.push('站点指标未回稳')
+  }
+  if (c.repairOrderId && c.status !== 'VISITED') {
+    tips.push('未完成回访')
+  }
+  return tips.join('、') + '，无法关闭'
+})
+
+const getPriorityText = (priority) => {
+  const map = { 0: '普通', 1: '较高', 2: '紧急', 3: '最高紧急' }
+  return map[priority] || '普通'
+}
+
+const getPriorityTagType = (priority) => {
+  const map = { 0: 'info', 1: '', 2: 'warning', 3: 'danger' }
+  return map[priority] || 'info'
+}
 
 const getTypeText = (type) => {
   const map = {
@@ -249,7 +311,7 @@ const confirmDispatch = async () => {
 }
 
 const handleClose = () => {
-  ElMessageBox.confirm('确定关闭该报冷事件吗？', '提示', {
+  ElMessageBox.confirm('确定关闭该报冷事件吗？关闭前需确认站点指标已回稳且居民回访已完成。', '提示', {
     type: 'warning'
   }).then(async () => {
     try {
@@ -261,6 +323,28 @@ const handleClose = () => {
       loadData()
     } catch (e) {
       ElMessage.error(e.message || '关闭失败')
+    }
+  }).catch(() => {})
+}
+
+const handleConfirmMetricStable = () => {
+  ElMessageBox.confirm('确认该站点指标已回稳？系统将检查近1小时的指标数据。', '确认指标回稳', {
+    type: 'warning',
+    confirmButtonText: '确认回稳',
+    cancelButtonText: '取消'
+  }).then(async () => {
+    stableLoading.value = true
+    try {
+      await confirmMetricStable(route.params.id, {
+        operatorId: userInfo.userId,
+        operatorName: userInfo.userName
+      })
+      ElMessage.success('站点指标已确认回稳')
+      loadData()
+    } catch (e) {
+      ElMessage.error(e.message || '确认失败')
+    } finally {
+      stableLoading.value = false
     }
   }).catch(() => {})
 }

@@ -188,6 +188,10 @@ public class InspectionExceptionService extends ServiceImpl<InspectionExceptionM
             throw new RuntimeException("异常已关闭");
         }
 
+        if ("PRIMARY_OVERLIMIT".equals(exception.getCloseRestriction())) {
+            throw new RuntimeException("一次网越限异常禁止直接关闭，请转成抢修工单或复测任务处理");
+        }
+
         if (exception.getRepairOrderId() != null) {
             RepairOrder repairOrder = repairOrderService.getById(exception.getRepairOrderId());
             if (repairOrder != null && !"CONFIRMED".equals(repairOrder.getStatus())
@@ -207,6 +211,30 @@ public class InspectionExceptionService extends ServiceImpl<InspectionExceptionM
         flowLogService.addLog("EXCEPTION", exceptionId, exception.getExceptionNo(),
                 "CLOSE", "关闭异常",
                 closerId, closerName, closeRemark);
+
+        return result;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public boolean convertToRecheck(Long exceptionId, Long operatorId, String operatorName, String recheckReason) {
+        InspectionException exception = this.getById(exceptionId);
+        if (exception == null) {
+            throw new RuntimeException("异常记录不存在");
+        }
+        if (!"PRIMARY_OVERLIMIT".equals(exception.getCloseRestriction())) {
+            throw new RuntimeException("只有一次网越限异常可以转复测");
+        }
+
+        exception.setCloseRestriction(null);
+        exception.setStatus("REPORTED");
+        exception.setAutoUpgrade(0);
+        exception.setUpgradeReason("转复测：" + recheckReason);
+        exception.setRepairOrderId(null);
+        boolean result = this.updateById(exception);
+
+        flowLogService.addLog("EXCEPTION", exceptionId, exception.getExceptionNo(),
+                "TRANSFER", "一次网越限异常转复测",
+                operatorId, operatorName, recheckReason);
 
         return result;
     }

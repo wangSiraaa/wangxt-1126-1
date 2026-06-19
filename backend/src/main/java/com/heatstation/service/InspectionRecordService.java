@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.heatstation.common.PageResult;
 import com.heatstation.entity.*;
+import com.heatstation.mapper.ColdComplaintMapper;
 import com.heatstation.mapper.InspectionRecordMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,9 @@ public class InspectionRecordService extends ServiceImpl<InspectionRecordMapper,
 
     @Autowired
     private OrderFlowLogService flowLogService;
+
+    @Autowired
+    private ColdComplaintMapper coldComplaintMapper;
 
     public PageResult<InspectionRecord> queryPage(Long pageNum, Long pageSize, Long stationId,
                                                    Long inspectorId, Long routeId, Date startTime, Date endTime) {
@@ -112,9 +116,12 @@ public class InspectionRecordService extends ServiceImpl<InspectionRecordMapper,
             List<InspectionException> exceptions = createExceptions(record, station);
             for (InspectionException ex : exceptions) {
                 if ("CRITICAL".equals(ex.getExceptionLevel()) && "PRIMARY".equals(station.getStationType())) {
+                    ex.setCloseRestriction("PRIMARY_OVERLIMIT");
+                    exceptionService.updateById(ex);
                     exceptionService.autoUpgradeToRepair(ex.getId(), null, "一次网压力严重越限，自动升级抢修");
                 }
             }
+            linkBranchLineComplaints(exceptions, station);
         }
 
         flowLogService.addLog("RECORD", record.getId(), record.getRecordNo(),
@@ -282,5 +289,74 @@ public class InspectionRecordService extends ServiceImpl<InspectionRecordMapper,
 
     private String generateExceptionNo() {
         return "EX" + System.currentTimeMillis();
+    }
+
+    private void linkBranchLineComplaints(List<InspectionException> exceptions, Station station) {
+        if (station.getBranchLine() == null || station.getBranchLine().isEmpty()) {
+            return;
+        }
+
+        LambdaQueryWrapper<Station> stationWrapper = new LambdaQueryWrapper<>();
+        stationWrapper.eq(Station::getBranchLine, station.getBranchLine());
+        stationWrapper.eq(Station::getStatus, 1);
+        List<Station> sameLineStations = stationService.list(stationWrapper);
+        List<Long> sameLineStationIds = new ArrayList<>();
+        for (Station s : sameLineStations) {
+            sameLineStationIds.add(s.getId());
+        }
+
+        if (sameLineStationIds.isEmpty()) {
+            return;
+        }
+
+        LambdaQueryWrapper<ColdComplaint> complaintWrapper = new LambdaQueryWrapper<>();
+        complaintWrapper.in(ColdComplaint::getStationId, sameLineStationIds);
+        complaintWrapper.notIn(ColdComplaint::getStatus, "CLOSED");
+        complaintWrapper.lt(ColdComplaint::getPriority, 3);
+        List<ColdComplaint> activeComplaints = coldComplaintMapper.selectList(complaintWrapper);
+
+        if (activeComplaints.isEmpty()) {
+            return;
+        }
+
+        InspectionException primaryException = exceptions.get(0);
+        String exceptionDesc = primaryException.getExceptionType() + "@" + station.getStationName();
+
+        for (ColdComplaint complaint : activeComplaints) {
+            int newPriority = calculatePriority(primaryException.getExceptionLevel(), complaint.getPriority());
+            if (newPriority > complaint.getPriority()) {
+                complaint.setPriority(newPriority);
+                complaint.setPriorityUpgradeReason(
+                        "同支线[" + station.getBranchLine() + "]站点" + station.getStationName()
+                                + "巡检发现" + primaryException.getExceptionDesc()
+                                + "，自动升级优先级");
+                complaint.setLinkedExceptionId(primaryException.getId());
+                coldComplaintMapper.updateById(complaint);
+
+                flowLogService.addLog("COMPLAINT", complaint.getId(), complaint.getComplaintNo(),
+                        "UPGRADE", "同支线巡检异常触发优先级升级至" + getPriorityText(newPriority),
+                        null, "系统自动", complaint.getPriorityUpgradeReason());
+            }
+        }
+    }
+
+    private int calculatePriority(String exceptionLevel, int currentPriority) {
+        if ("CRITICAL".equals(exceptionLevel)) {
+            return 3;
+        }
+        if ("WARNING".equals(exceptionLevel) && currentPriority < 2) {
+            return 2;
+        }
+        return Math.max(currentPriority, 1);
+    }
+
+    private String getPriorityText(int priority) {
+        switch (priority) {
+            case 0: return "普通";
+            case 1: return "较高";
+            case 2: return "紧急";
+            case 3: return "最高紧急";
+            default: return "未知";
+        }
     }
 }

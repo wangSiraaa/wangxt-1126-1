@@ -41,11 +41,13 @@ CREATE TABLE hs_station (
     duty_person VARCHAR(64) COMMENT '责任人',
     duty_phone VARCHAR(20) COMMENT '责任电话',
     sort_order INT DEFAULT 0 COMMENT '排序号',
+    branch_line VARCHAR(64) COMMENT '所属支线编码，同支线站点编码相同表示在同一供水管线上',
     status TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用 0-停用',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     INDEX idx_station_type (station_type),
-    INDEX idx_status (status)
+    INDEX idx_status (status),
+    INDEX idx_branch_line (branch_line)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='换热站表';
 
 -- ============================================
@@ -165,6 +167,7 @@ CREATE TABLE hs_inspection_exception (
     status VARCHAR(32) NOT NULL DEFAULT 'REPORTED' COMMENT '状态：REPORTED-已上报 CONFIRMED-已确认 DISPATCHED-已派单 IN_REPAIR-抢修中 REPAIRED-已修复 CLOSED-已关闭',
     auto_upgrade TINYINT DEFAULT 0 COMMENT '是否自动升级：0-否 1-是',
     upgrade_reason VARCHAR(512) COMMENT '升级原因',
+    close_restriction VARCHAR(32) COMMENT '关闭限制：PRIMARY_OVERLIMIT-一次网越限禁止关闭 NULL-无限制',
     repair_order_id BIGINT COMMENT '关联抢修工单ID',
     handler_id BIGINT COMMENT '处理人ID',
     handler_name VARCHAR(64) COMMENT '处理人姓名',
@@ -214,6 +217,9 @@ CREATE TABLE hs_repair_order (
     return_temp_after DECIMAL(10,2) COMMENT '抢修后回水温度',
     repair_content VARCHAR(2048) COMMENT '抢修内容',
     repair_material VARCHAR(1024) COMMENT '使用材料',
+    valve_operation VARCHAR(2048) COMMENT '阀门操作记录：操作的阀门编号、开关状态、操作时间等',
+    temp_heat_plan VARCHAR(2048) COMMENT '临时供热方案：应急供热措施描述',
+    est_restore_time DATETIME COMMENT '预计恢复正常时间',
     work_hours DECIMAL(6,2) COMMENT '工时(小时)',
     remark VARCHAR(1024) COMMENT '备注',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -244,6 +250,11 @@ CREATE TABLE hs_cold_complaint (
     complaint_type VARCHAR(64) NOT NULL COMMENT '报冷类型：NOT_HOT-不暖 TEMPERATURE_LOW-温度低 LEAKAGE-漏水 NOISE-噪音 OTHER-其他',
     complaint_desc VARCHAR(1024) COMMENT '问题描述',
     indoor_temp DECIMAL(10,2) COMMENT '室内温度',
+    priority INT NOT NULL DEFAULT 0 COMMENT '优先级：0-普通 1-较高 2-紧急 3-最高紧急',
+    priority_upgrade_reason VARCHAR(512) COMMENT '优先级升级原因',
+    linked_exception_id BIGINT COMMENT '关联巡检异常ID（同支线异常触发升级时关联）',
+    metric_stable TINYINT DEFAULT 0 COMMENT '站点指标是否回稳：0-未回稳 1-已回稳',
+    metric_stable_time DATETIME COMMENT '指标回稳确认时间',
     complaint_time DATETIME NOT NULL COMMENT '报冷时间',
     reporter_name VARCHAR(64) COMMENT '登记人姓名',
     status VARCHAR(32) NOT NULL DEFAULT 'CREATED' COMMENT '状态：CREATED-已创建 PROCESSING-处理中 REPAIRING-抢修中 REPAIRED-已修复 VISITED-已回访 CLOSED-已关闭',
@@ -263,10 +274,13 @@ CREATE TABLE hs_cold_complaint (
     remark VARCHAR(1024) COMMENT '备注',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    INDEX idx_station_id (station_id),
+    INDEX idx_station_id (stationId),
     INDEX idx_status (status),
     INDEX idx_complaint_time (complaint_time),
-    INDEX idx_resident_phone (resident_phone)
+    INDEX idx_resident_phone (resident_phone),
+    INDEX idx_priority (priority),
+    INDEX idx_linked_exception_id (linked_exception_id),
+    INDEX idx_metric_stable (metric_stable)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='居民报冷事件表';
 
 -- ============================================
@@ -325,15 +339,15 @@ INSERT INTO sys_user (user_code, user_name, role_code, phone, status) VALUES
 ('repair02', '抢修二队', 'REPAIR', '13800000007', 1);
 
 -- 初始化换热站
-INSERT INTO hs_station (station_code, station_name, station_address, station_type, pressure_limit_min, pressure_limit_max, temp_limit_min, temp_limit_max, duty_person, duty_phone, sort_order, status) VALUES
-('ST001', '一号换热站', '朝阳区建国路88号', 'PRIMARY', 0.6, 1.2, 60.0, 95.0, '王站长', '13900000001', 1, 1),
-('ST002', '二号换热站', '朝阳区朝阳路100号', 'PRIMARY', 0.6, 1.2, 60.0, 95.0, '李站长', '13900000002', 2, 1),
-('ST003', '三号换热站', '海淀区中关村大街1号', 'PRIMARY', 0.6, 1.2, 60.0, 95.0, '张站长', '13900000003', 3, 1),
-('ST004', '四号换热站', '海淀区西三环北路2号', 'SECONDARY', 0.3, 0.6, 40.0, 60.0, '刘站长', '13900000004', 4, 1),
-('ST005', '五号换热站', '西城区西单北大街100号', 'SECONDARY', 0.3, 0.6, 40.0, 60.0, '陈站长', '13900000005', 5, 1),
-('ST006', '六号换热站', '东城区东长安街1号', 'SECONDARY', 0.3, 0.6, 40.0, 60.0, '周站长', '13900000006', 6, 1),
-('ST007', '七号换热站', '丰台区方庄路10号', 'PRIMARY', 0.6, 1.2, 60.0, 95.0, '吴站长', '13900000007', 7, 1),
-('ST008', '八号换热站', '石景山区八角西街8号', 'SECONDARY', 0.3, 0.6, 40.0, 60.0, '郑站长', '13900000008', 8, 1);
+INSERT INTO hs_station (station_code, station_name, station_address, station_type, pressure_limit_min, pressure_limit_max, temp_limit_min, temp_limit_max, duty_person, duty_phone, sort_order, branch_line, status) VALUES
+('ST001', '一号换热站', '朝阳区建国路88号', 'PRIMARY', 0.6, 1.2, 60.0, 95.0, '王站长', '13900000001', 1, 'BL-EAST-01', 1),
+('ST002', '二号换热站', '朝阳区朝阳路100号', 'PRIMARY', 0.6, 1.2, 60.0, 95.0, '李站长', '13900000002', 2, 'BL-EAST-01', 1),
+('ST003', '三号换热站', '海淀区中关村大街1号', 'PRIMARY', 0.6, 1.2, 60.0, 95.0, '张站长', '13900000003', 3, 'BL-WEST-01', 1),
+('ST004', '四号换热站', '海淀区西三环北路2号', 'SECONDARY', 0.3, 0.6, 40.0, 60.0, '刘站长', '13900000004', 4, 'BL-WEST-01', 1),
+('ST005', '五号换热站', '西城区西单北大街100号', 'SECONDARY', 0.3, 0.6, 40.0, 60.0, '陈站长', '13900000005', 5, 'BL-CENTER-01', 1),
+('ST006', '六号换热站', '东城区东长安街1号', 'SECONDARY', 0.3, 0.6, 40.0, 60.0, '周站长', '13900000006', 6, 'BL-CENTER-01', 1),
+('ST007', '七号换热站', '丰台区方庄路10号', 'PRIMARY', 0.6, 1.2, 60.0, 95.0, '吴站长', '13900000007', 7, 'BL-SOUTH-01', 1),
+('ST008', '八号换热站', '石景山区八角西街8号', 'SECONDARY', 0.3, 0.6, 40.0, 60.0, '郑站长', '13900000008', 8, 'BL-SOUTH-01', 1);
 
 -- 初始化居民报冷事件示例
 INSERT INTO hs_cold_complaint (complaint_no, station_id, station_code, station_name, resident_name, resident_phone, resident_address, community, building_no, room_no, complaint_type, complaint_desc, indoor_temp, complaint_time, reporter_name, status) VALUES

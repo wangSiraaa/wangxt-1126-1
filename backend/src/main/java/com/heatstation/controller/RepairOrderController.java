@@ -79,8 +79,20 @@ public class RepairOrderController {
         String repairMaterial = (String) params.get("repairMaterial");
         BigDecimal workHours = params.get("workHours") != null ? new BigDecimal(params.get("workHours").toString()) : null;
 
+        String valveOperation = (String) params.get("valveOperation");
+        String tempHeatPlan = (String) params.get("tempHeatPlan");
+        Date estRestoreTime = null;
+        if (params.get("estRestoreTime") != null && !params.get("estRestoreTime").toString().isEmpty()) {
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            try {
+                estRestoreTime = sdf.parse(params.get("estRestoreTime").toString());
+            } catch (Exception ignored) {
+            }
+        }
+
         repairOrderService.finishRepair(orderId, pressureAfter, supplyTempAfter, returnTempAfter,
-                repairContent, repairMaterial, workHours);
+                repairContent, repairMaterial, workHours,
+                valveOperation, tempHeatPlan, estRestoreTime);
         return Result.success("抢修完成");
     }
 
